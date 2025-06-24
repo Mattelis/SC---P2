@@ -1,5 +1,6 @@
 import secrets
 import hashlib
+import base64
 
 size = 1024
 rnds = 100
@@ -147,6 +148,30 @@ def RSA(pm,n,e):
     c = pow(int.from_bytes(pm),e,n) # Funciona para a  criptografia e decriptografia
     return c.to_bytes(256,'big')
 
+def signMsg(msg, private_key):
+    hash_bytes = hashlib.sha3_256(msg.encode('utf-8')).digest() #Calcula o hash
+    hash_int = int.from_bytes(hash_bytes, byteorder='big') #Converte pra int
+    n, d = private_key
+
+    sign_int = pow(hash_int, d, n) #Realiza a assinatura
+    
+    sign_byte = sign_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big') #Converte de volta para bytes
+    assinatura_b64 = base64.b64encode(sign_byte).decode('utf-8') #Converte para base64
+
+    return assinatura_b64
+
+def verifySign(msg, b64, public_key): #Verifica se a assinatura está correta
+    sign_bytes = base64.b64decode(b64) #Transforma a string em base64 para byte
+    sign_int = int.from_bytes(sign_bytes, byteorder='big') #Transforma a forma de byte em forma de int
+    n, e = public_key
+
+    hash_int = pow(sign_int, e, n) #Decodifica a assinatura usando a chave pública.
+
+    hash_bytes = hash_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big') #Converte o hash para bytes
+    hash_msg = hashlib.sha3_256(msg.encode('utf-8')).digest() #Calcula o hash da mensagem em claro
+
+    return hash_bytes[-len(hash_msg):] == hash_msg #Compara o hash decifrado com o hash da mensagem olhando os últimos bytes.
+
 # START
 def RSAexec():
     p = genprime()
@@ -193,10 +218,11 @@ def RSAexec():
         print(M)
         print()
         print(deM)  # Imprimindo ambas as mensagens para conferir que são iguais (a segunda é retornada com b'', mas o conteúdo é identico)
+    
+    sign64 = signMsg(tempM, private_key)
+    print("Assinatura base64 = " + sign64)
+    print("Assinatura válida? ", verifySign(tempM, sign64, public_key))
     return Mlist,Clist
 
+
 Mlist, Clist = RSAexec()
-
-    
-
-
