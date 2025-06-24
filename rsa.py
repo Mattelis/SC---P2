@@ -111,7 +111,7 @@ def OAEP(MGF,HASH,hlen,k,M,L): # Toma como argumento a função MGF, a função 
     
     mlen = len(M)  
     PS = bytes(k - mlen - 2*hlen - 2)
-    DB = lhash + PS + bytes([1]) + bytes(M,'utf-8')
+    DB = lhash + PS + bytes([1]) + M
     seed = secrets.randbits(8*hlen).to_bytes(hlen,'big')
     dbMask = MGF(seed,k-hlen-1)
     maskDB = bytes(a ^ b for a, b in zip(dbMask, DB)) 
@@ -149,25 +149,21 @@ def RSA(pm,n,e):
     return c.to_bytes(256,'big')
 
 def signMsg(msg, private_key):
-    hash_bytes = hashlib.sha3_256(msg.encode('utf-8')).digest() #Calcula o hash
-    hash_int = int.from_bytes(hash_bytes, byteorder='big') #Converte pra int
+    hash_bytes = hashlib.sha3_256(msg.encode('utf-8')).digest() 
     n, d = private_key
-
-    sign_int = pow(hash_int, d, n) #Realiza a assinatura
-    
-    sign_byte = sign_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big') #Converte de volta para bytes
+    padmsg = OAEP(MGF,HASH,32,256,hash_bytes,'')
+    sign_byte = RSA(padmsg,n,d)
     assinatura_b64 = base64.b64encode(sign_byte).decode('utf-8') #Converte para base64
 
     return assinatura_b64
 
 def verifySign(msg, b64, public_key): #Verifica se a assinatura está correta
     sign_bytes = base64.b64decode(b64) #Transforma a string em base64 para byte
-    sign_int = int.from_bytes(sign_bytes, byteorder='big') #Transforma a forma de byte em forma de int
     n, e = public_key
 
-    hash_int = pow(sign_int, e, n) #Decodifica a assinatura usando a chave pública.
-
-    hash_bytes = hash_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big') #Converte o hash para bytes
+    decbytes = RSA(sign_bytes,n,e)
+    hash_bytes  = deOAEP(MGF,HASH,32,256,decbytes,'')
+    
     hash_msg = hashlib.sha3_256(msg.encode('utf-8')).digest() #Calcula o hash da mensagem em claro
 
     return hash_bytes[-len(hash_msg):] == hash_msg #Compara o hash decifrado com o hash da mensagem olhando os últimos bytes.
@@ -210,12 +206,12 @@ def RSAexec():
         Mlist.append(tempM)
     Clist = []
     for M in Mlist:
-        PM = OAEP(MGF,HASH,hlen,k//8,M,'')      # Obtendo a mensagem com padding
-        C = RSA(PM,public_key[0],public_key[1]) # Obtendo mensagem criptografada
+        PM = OAEP(MGF,HASH,hlen,k//8,bytes(M,'utf-8'),'')      # Obtendo a mensagem com padding
+        C = RSA(PM,private_key[0],private_key[1]) # Obtendo mensagem assinada
         Clist.append(PM)        # Colocando na lista de Mensagens criptografadas
-        dM = RSA(C,private_key[0],private_key[1])   # Decriptografando a mensagem
+        dM = RSA(C,public_key[0],public_key[1])   # Decriptografando a mensagem
         deM = deOAEP(MGF,HASH,hlen,k//8,dM,'')  # Removendo o padding
-        print(M)
+        print(bytes(M,'utf-8'))
         print()
         print(deM)  # Imprimindo ambas as mensagens para conferir que são iguais (a segunda é retornada com b'', mas o conteúdo é identico)
     
